@@ -1,0 +1,32 @@
+
+Display name 
+Prepare analysis on SonarQube
+
+
+SonarQube server end point
+SonarQube-Connection
+
+Choose the way to run the analysis
+use standalone sonarqube cli
+
+Yaml files 
+1. prepare analysis configuration 
+steps:
+- task: SonarSource.sonarqube.15B84CA1-B62F-4AA063157.SonarQubePrepare@7
+  displayName: 'Prepare analysis on SonarQube'
+  inputs:
+    SonarQube: 'SonarQube-Connection'
+    scannerMode: cli
+    configMode: manual
+    cliProjectKey: 'KI-Anatics-Automation'
+    cliProjectName: 'KI-Anatics-Automation'
+	
+2. Run code analysis
+steps:
+- task: SonarSource.sonarqube.6D01813A-95164AEB38055.SonarQubenalyze@7
+  displayName: 'Run Code Analysis'
+  
+3. publish quality get result
+steps:
+- task: SonarSource.sonarqube.291ed3-b1b0-bf822d9095ef.SonarQbePublish@7
+  displayName: 'Publish Quality Gate Result'
