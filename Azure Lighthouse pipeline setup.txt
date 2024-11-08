@@ -1,0 +1,169 @@
+Azure Pipeline steps i Lighthouse[node js] 
+[display name & commands]
+1. file transform 
+  File Transform:  
+  target file - 
+  config.json
+
+2. Installing Az Module
+  Install-Module Az.Storage -force -AllowClobber
+  
+3. Connecting to Azure
+$appid="appid needs to added here[usere id]"
+$newsecret="secret Id needs to be added[password]"
+$tenantId="[tenant id added here]"
+
+$SecureStringPwd = $newsecret| ConvertTo-SecureString -AsPlainText -Force
+$pscredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $appid, $SecureStringPwd
+Connect-AzAccount -ServicePrincipal -Credential $pscredential -Tenant $tenantId
+
+4. Whitelisting IP
+$IPAddress = (Invoke-WebRequest -uri "http://ifconfig.me/ip" -UseBasicParsing).Content
+write-output $IPAddress
+Add-AzStorageAccountNetworkRule -ResourceGroupName "ummo-athena-weu-qa-rsg-01" -AccountName "saweustagecypress01" -IPAddressOrRange "$($IPAddress)"
+
+5. Install npm
+npm install
+
+6. Run code
+node comparison.js
+
+7. Send mail
+# Creating Automation folder and copying it to storage blob along with time appended extent report
+$application_folder = "LightHouse"
+$foldername = "LightHouse-" + (Get-Date -Format "dd-MM-yyyy")
+
+if(!(Test-Path -Path $(system.defaultworkingdirectory)\$application_folder\$foldername )){
+    New-Item -ItemType directory -Path $(system.defaultworkingdirectory)\$application_folder\$foldername
+}
+
+$timefoldername = "LightHouse-" + (get-date -format HH_mm)
+ 
+New-Item -Path $(system.defaultworkingdirectory)\$application_folder\$foldername\$timefoldername -ItemType Directory
+ 
+Copy-Item -Path $(system.defaultworkingdirectory)\application.log -Destination $(system.defaultworkingdirectory)\$application_folder\$foldername\$timefoldername -recurse -Force
+
+Copy-Item -Path $(system.defaultworkingdirectory)\Results.xlsx -Destination $(system.defaultworkingdirectory)\$application_folder\$foldername\$timefoldername -recurse -Force
+
+# Copying to Azure Blob Storage
+azcopy copy “$(system.defaultworkingdirectory)\$application_folder" "https://saweusess01.blob.core.windows.net/reports?sp=racwdl&st=2024-04-21T12: [bolb storage url]" --recursive=true
+
+# Configuration
+$clientId = "c3ab70cd-05f6-4585-95ba-c38ebd8812e9"          # Replace with your client ID from Azure Portal
+$clientSecret = "m3s8Q~ej1~Sr9aJ9t90j~zI61hucunzu6xaUHcBf"  # Replace with your client secret from Azure Portal
+$tenantId = "1e355c04-e0a4-42ed-8e2d-7351591f0ef1"          # Replace with your tenant ID
+$recipientEmail = "khsimaliurffaiz.ahmedsoudagar@kantar.com" # Replace with the recipient's email address
+$cc = "anurada.jagadeesh@kantar.com"
+$bcc = "kammarisaikrishna.acari@kantar.com"
+$fromEmail = "SVC.prodautomation2@kantar.com" # Replace with the email address sending the email
+
+# Function to get access token using v2 endpoint
+function Get-AccessToken {
+    param (
+        [string]$clientId,
+        [string]$clientSecret,
+        [string]$tenantId
+    )
+
+    $tokenEndpoint = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+    $body = @{
+        grant_type    = "client_credentials"
+        client_id     = $clientId
+        client_secret = $clientSecret
+        scope         = "https://graph.microsoft.com/.default"
+    }
+
+    $response = Invoke-RestMethod -Uri $tokenEndpoint -Method Post -Body $body
+    return $response.access_token
+}
+
+# Function to send email using Microsoft Graph API
+function Send-Email {
+    param (
+        [string]$accessToken,
+        [string]$recipientEmail,
+        [string]$cc,
+        [string]$bcc,
+        [string]$subject,
+        [string]$body,
+        [string]$fromEmail
+    )
+
+    $graphApiEndpoint = "https://graph.microsoft.com/v1.0/users/$($recipientEmail)/sendMail"
+    $headers = @{
+        Authorization = "Bearer $accessToken"
+        "Content-Type" = "application/json"
+    }
+
+    $emailData = @{
+        message = @{
+            subject = $subject
+            body = @{
+                contentType = "Text"
+                content = $body
+            }
+            toRecipients = @(
+                @{
+                    emailAddress = @{
+                        address = $recipientEmail
+                    }
+                }
+            )
+            ccRecipients = @(
+                @{
+                    emailAddress = @{
+                        address = $cc
+                    }
+                }
+            )
+            bccRecipients = @(
+                @{
+                    emailAddress = @{
+                        address = $bcc
+                    }
+                }
+            )
+            from = @{
+                emailAddress = @{
+                    address = $fromEmail
+                }
+            }
+        }
+    }
+
+    $emailJson = $emailData | ConvertTo-Json -Depth 100
+    Invoke-RestMethod -Uri $graphApiEndpoint -Method Post -Headers $headers -Body $emailJson -ContentType "application/json"
+}
+
+# Main script
+try {
+    # Get the access token
+    $accessToken = Get-AccessToken -clientId $clientId -clientSecret $clientSecret -tenantId $tenantId
+
+    # Compose the email subject and body
+    $subject = “Light House Report”
+$body = "Here is the Light House Excel result:"
+ $body += "`n 
+ https://saweustagec1.blob.core.windows.net/rerts/$application_folder/$foldername/$timefoldername/Res.xlsx `n”
+$body += “`n Here is the Light House Log file:"
+$body += "`n 
+ https://saweustagecyp1.blob.core.windows.net/rerts/$application_folder/$foldername/$timefoldername/applicat.log”
+
+
+
+$sender = "Sender Name <$fromEmail>"
+
+    # Send the email
+    Send-Email -accessToken $accessToken -recipientEmail $recipientEmail -cc $cc -bcc $bcc -subject $subject -body $body -fromEmail $sender
+
+    Write-Output "Email sent successfully!"
+}
+catch {
+    Write-Output "Failed to send email: $($_.Exception.Message)"
+} 
+
+
+Removing IP
+$IPAddress = (Invoke-WebRequest -uri "http://ifconfig.me/ip" -UseBasicParsing).Content
+write-output $IPAddress
+Remove-AzStorageAccountNetworkRule -ResourceGroupName "ummo-athenasai-qa-rsg-01" -AccountName "saweess01" -IPAddressOrRange "$($IPAddress)"
